@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Interview Assistant</title>
+    <!-- Use the Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS from CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .message-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .message-container::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 4px;
+        }
+        .message-container::-webkit-scrollbar-track {
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 md:p-12">
+
+    <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden">
+        <header class="bg-indigo-600 p-6">
+            <h1 class="text-3xl font-bold text-white text-center">Interview Assistant</h1>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="p-6">
+            <!-- Goal Input Panel (Collapsible) -->
+            <div id="goalPanel" class="bg-gray-50 p-6 rounded-2xl mb-6 transition-all duration-300 ease-in-out">
+                <button onclick="togglePanel()" class="w-full flex justify-between items-center text-lg font-medium text-gray-800 focus:outline-none">
+                    <span>Define Interview Goals</span>
+                    <svg id="toggleIcon" class="w-6 h-6 transform transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+                <div id="panelContent" class="mt-4 space-y-4">
+                    <p class="text-gray-600">Enter a description of what you want to learn from the interview. The AI will generate a structured set of questions based on your goals.</p>
+                    <textarea id="goalsInput" class="w-full h-32 p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors duration-200" placeholder="e.g., 'Help me document the process for a software bug fix. I need to know the steps taken, the tools used, and any challenges encountered.'"></textarea>
+                    <button id="processBtn" onclick="processGoals()" class="w-full px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Process Goals</button>
+                </div>
+            </div>
+
+            <!-- Structured Output Display Panel -->
+            <div id="structuredOutput" class="hidden bg-gray-100 p-6 rounded-2xl mb-6">
+                <h2 class="text-xl font-semibold mb-3">Structured Interview Fields</h2>
+                <pre class="bg-gray-200 p-4 rounded-xl text-sm whitespace-pre-wrap break-all overflow-x-auto">
+                    <code id="outputCode" class="text-gray-800"></code>
+                </pre>
+            </div>
+
+            <!-- Chatbot Panel -->
+            <div id="chatbotPanel" class="hidden flex flex-col h-96 bg-gray-50 rounded-2xl p-4">
+                <div id="chatHistory" class="message-container flex-grow overflow-y-auto space-y-4 p-2 mb-4">
+                    <!-- Chat messages will be appended here by JavaScript -->
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="text" id="chatInput" class="flex-grow p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors duration-200" placeholder="Type your response...">
+                    <button id="sendBtn" onclick="sendChatMessage()" class="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Message Box -->
+            <div id="messageBox" class="fixed inset-0 bg-gray-800 bg-opacity-75 hidden items-center justify-center p-4 z-50" onclick="closeMessageBox()">
+                <div class="bg-white p-6 rounded-xl shadow-xl max-w-sm mx-auto text-center" onclick="event.stopPropagation()">
+                    <h3 id="messageTitle" class="text-lg font-bold mb-2 text-gray-800"></h3>
+                    <p id="messageText" class="text-sm text-gray-600 mb-4"></p>
+                    <button onclick="closeMessageBox()" class="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data structure to hold the interview information
+        let structuredDataSchema = {};
+        let interviewData = {};
+        let currentQuestionIndex = 0;
+        let isProcessing = false;
+
+        // UI elements
+        const goalPanel = document.getElementById('goalPanel');
+        const panelContent = document.getElementById('panelContent');
+        const toggleIcon = document.getElementById('toggleIcon');
+        const goalsInput = document.getElementById('goalsInput');
+        const processBtn = document.getElementById('processBtn');
+        const structuredOutput = document.getElementById('structuredOutput');
+        const outputCode = document.getElementById('outputCode');
+        const chatbotPanel = document.getElementById('chatbotPanel');
+        const chatHistory = document.getElementById('chatHistory');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const messageBox = document.getElementById('messageBox');
+        const messageTitle = document.getElementById('messageTitle');
+        const messageText = document.getElementById('messageText');
+
+        // Helper function to display a message box
+        function showMessageBox(title, text) {
+            messageTitle.textContent = title;
+            messageText.textContent = text;
+            messageBox.classList.remove('hidden');
+            messageBox.classList.add('flex');
+        }
+
+        // Helper function to close the message box
+        function closeMessageBox() {
+            messageBox.classList.remove('flex');
+            messageBox.classList.add('hidden');
+        }
+
+        // Toggles the visibility of the goal input panel
+        function togglePanel() {
+            panelContent.classList.toggle('hidden');
+            toggleIcon.classList.toggle('rotate-180');
+        }
+
+        // Adds a new message to the chat history
+        function addMessage(sender, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('flex', 'flex-col', 'max-w-xs', 'p-3', 'rounded-2xl', 'break-words', 'whitespace-pre-wrap');
+
+            if (sender === 'user') {
+                messageDiv.classList.add('self-end', 'bg-indigo-100', 'text-indigo-900', 'rounded-br-none');
+            } else {
+                messageDiv.classList.add('self-start', 'bg-gray-100', 'text-gray-800', 'rounded-bl-none');
+            }
+            messageDiv.textContent = text;
+            chatHistory.appendChild(messageDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight; // Auto-scroll to the bottom
+        }
+
+        // Function to start the chat bot interaction
+        function startChatbot() {
+            if (currentQuestionIndex < Object.keys(structuredDataSchema).length) {
+                const fields = Object.keys(structuredDataSchema);
+                const currentField = fields[currentQuestionIndex];
+                const question = structuredDataSchema[currentField].prompt;
+                addMessage('model', question);
+            } else {
+                // All fields are filled out
+                addMessage('model', "Great! I have all the information I need. Here is the final structured data:");
+                // Display the final JSON object in a clean format
+                const finalJson = JSON.stringify(interviewData, null, 2);
+                addMessage('model', finalJson);
+                // Disable input and send button
+                chatInput.disabled = true;
+                sendBtn.disabled = true;
+                showMessageBox("Interview Complete", "All required information has been collected. You can now reset the page to start a new interview.");
+            }
+        }
+
+        // Processes the user's input from the chat
+        function sendChatMessage() {
+            const userMessage = chatInput.value.trim();
+            if (!userMessage) return;
+
+            addMessage('user', userMessage);
+            chatInput.value = '';
+
+            const fields = Object.keys(structuredDataSchema);
+            const currentField = fields[currentQuestionIndex];
+            const fieldType = structuredDataSchema[currentField].type;
+
+            // Simple AI as judge logic
+            let isSufficient = false;
+            switch (fieldType) {
+                case 'string':
+                case 'story':
+                    // Just check if the input is not empty
+                    isSufficient = userMessage.length > 0;
+                    break;
+                case 'yes/no':
+                    // Check if the user's response is 'yes' or 'no'
+                    isSufficient = userMessage.toLowerCase() === 'yes' || userMessage.toLowerCase() === 'no';
+                    break;
+            }
+
+            if (isSufficient) {
+                // Save the data and move to the next question
+                interviewData[currentField] = userMessage;
+                currentQuestionIndex++;
+                setTimeout(startChatbot, 1000); // Wait a moment for a more conversational feel
+            } else {
+                // The AI judges the response as insufficient
+                addMessage('model', "I'm sorry, that response doesn't seem to be sufficient. Can you please provide a more detailed answer to my question?");
+                // Do not increment the question index
+            }
+        }
+
+        // Simulates a Generative AI API call to create a dynamic schema
+        async function generateSchemaFromGoals(goals) {
+            const lowerCaseGoals = goals.toLowerCase();
+            const words = lowerCaseGoals.split(/\s+/).filter(word => word.length > 2);
+            
+            let schema = {};
+
+            // Dynamic field generation based on keywords
+            if (words.includes('bug') || words.includes('fix') || words.includes('software')) {
+                schema["bug_id"] = { "prompt": "What is the ID or title of the bug?", "type": "string" };
+                schema["reproduction_steps"] = { "prompt": "Can you outline the steps to reproduce the bug?", "type": "story" };
+                schema["resolution_details"] = { "prompt": "What was the final fix for this issue?", "type": "story" };
+            }
+
+            if (words.includes('document') || words.includes('documentation') || words.includes('guide')) {
+                schema["topic_name"] = { "prompt": "What is the primary topic of the document?", "type": "string" };
+                schema["target_audience"] = { "prompt": "Who is the intended audience for this guide?", "type": "string" };
+                schema["key_steps"] = { "prompt": "What are the most important steps to follow?", "type": "story" };
+            }
+
+            if (words.includes('recipe') || words.includes('cook') || words.includes('food')) {
+                schema["recipe_name"] = { "prompt": "What is the name of the recipe?", "type": "string" };
+                schema["ingredients"] = { "prompt": "Please list the ingredients required for this dish.", "type": "story" };
+                schema["instructions"] = { "prompt": "Can you describe the step-by-step instructions?", "type": "story" };
+            }
+
+            if (words.includes('project') || words.includes('plan') || words.includes('timeline')) {
+                schema["project_title"] = { "prompt": "What is the title of the project?", "type": "string" };
+                schema["milestones"] = { "prompt": "What are the key milestones and their deadlines?", "type": "story" };
+                schema["team_members"] = { "prompt": "Who are the team members involved?", "type": "string" };
+            }
+
+            // If no specific keywords are found, provide a generic but dynamic schema
+            if (Object.keys(schema).length === 0) {
+                schema[`${words[0]}_details`] = {
+                    "prompt": `Can you provide more details about the topic of "${goals}"?`,
+                    "type": "story"
+                };
+                schema[`${words[0]}_summary`] = {
+                    "prompt": `Please summarize the key takeaways from "${goals}".`,
+                    "type": "story"
+                };
+            }
+            
+            return schema;
+        }
+
+        // Main function to process the goals using the new simulated GenAI
+        async function processGoals() {
+            if (isProcessing) return;
+
+            const goals = goalsInput.value.trim();
+            if (!goals) {
+                showMessageBox("Error", "Please enter your interview goals before processing.");
+                return;
+            }
+
+            isProcessing = true;
+            processBtn.textContent = 'Processing...';
+            processBtn.disabled = true;
+
+            // Simulate the GenAI response with a slight delay
+            setTimeout(async () => {
+                try {
+                    structuredDataSchema = await generateSchemaFromGoals(goals);
+
+                    // Display the generated schema
+                    outputCode.textContent = JSON.stringify(structuredDataSchema, null, 2);
+                    structuredOutput.classList.remove('hidden');
+                    chatbotPanel.classList.remove('hidden');
+                    
+                    // Hide the goal panel
+                    panelContent.classList.add('hidden');
+                    toggleIcon.classList.add('rotate-180');
+                    
+                    // Add a friendly welcome message before the first question
+                    const welcomeMessage = "Hi. I would like to ask you a series of questions to help gather information about your goals. Let's begin.";
+                    addMessage('model', welcomeMessage);
+
+                    // Start the chatbot conversation after a brief delay
+                    setTimeout(startChatbot, 1500);
+
+                } catch (e) {
+                    showMessageBox("Error", "Failed to generate structured data from your goals.");
+                    console.error("Generation error:", e);
+                }
+
+                isProcessing = false;
+                processBtn.textContent = 'Process Goals';
+                processBtn.disabled = false;
+            }, 1000); // Simulate network delay
+        }
+
+        // Trigger send on Enter key
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+
+    </script>
+</body>
+</html>
